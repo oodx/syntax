@@ -96,6 +96,108 @@ impl Template {
         }
         Ok(out)
     }
+
+    /// Parse a Jynx-style template with function segments of the form:
+    ///   %name:arg(text)
+    /// Alongside existing ${VAR} and $$ rules.
+    /// - name: [A-Za-z_][A-Za-z0-9_\-]*
+    /// - arg: any run of non-whitespace, non-parenthesis characters up to '(' (e.g., warn, red, class-1)
+    /// - text: balanced parentheses content, supports nested parentheses
+    pub fn parse_jynx(input: &str) -> Result<Self, SyntaxError> {
+        let mut segs: Vec<Segment> = Vec::new();
+        let mut lit = String::new();
+        let bytes = input.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            let ch = bytes[i] as char;
+            if ch == '$' {
+                // Reuse ${VAR} and $$ rules
+                if i + 1 < bytes.len() && bytes[i + 1] as char == '$' {
+                    lit.push('$');
+                    i += 2;
+                    continue;
+                }
+                if i + 1 < bytes.len() && bytes[i + 1] as char == '{' {
+                    if !lit.is_empty() { segs.push(Segment::Lit(std::mem::take(&mut lit))); }
+                    i += 2; // skip ${
+                    let start = i;
+                    let mut found = false;
+                    while i < bytes.len() {
+                        if bytes[i] as char == '}' { found = true; break; }
+                        i += 1;
+                    }
+                    if !found { return Err(SyntaxError::ResolveError("Unclosed ${ in template".into())); }
+                    let var = &input[start..i];
+                    if !var.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+                        return Err(SyntaxError::ResolveError(format!("Invalid var name: {}", var)));
+                    }
+                    segs.push(Segment::Var(var.to_string()));
+                    i += 1; // skip }
+                    continue;
+                }
+                lit.push('$');
+                i += 1;
+                continue;
+            }
+
+            if ch == '%' {
+                // Try to parse %name:arg(text)
+                let name_start = i + 1;
+                let mut j = name_start;
+                // name
+                while j < bytes.len() {
+                    let c = bytes[j] as char;
+                    if c.is_ascii_alphanumeric() || c == '_' || c == '-' { j += 1; } else { break; }
+                }
+                if j == name_start { // no name, treat as literal '%'
+                    lit.push('%'); i += 1; continue;
+                }
+                // expect ':'
+                if j >= bytes.len() || bytes[j] as char != ':' {
+                    // not a function, treat as literal
+                    lit.push('%'); i += 1; continue;
+                }
+                let name = &input[name_start..j];
+                j += 1; // skip ':'
+                // parse arg until '(' or whitespace
+                let arg_start = j;
+                while j < bytes.len() {
+                    let c = bytes[j] as char;
+                    if c == '(' || c.is_whitespace() { break; }
+                    j += 1;
+                }
+                if j >= bytes.len() || bytes[j] as char != '(' {
+                    // not a proper function call, treat as literal
+                    lit.push('%'); i += 1; continue;
+                }
+                let arg = &input[arg_start..j];
+                // parse balanced parentheses for text
+                j += 1; // skip '('
+                let text_start = j;
+                let mut depth = 1;
+                while j < bytes.len() {
+                    let c = bytes[j] as char;
+                    if c == '(' { depth += 1; }
+                    else if c == ')' { depth -= 1; if depth == 0 { break; } }
+                    j += 1;
+                }
+                if depth != 0 { return Err(SyntaxError::ResolveError("Unclosed ( in %func call".into())); }
+                let text = &input[text_start..j];
+                j += 1; // skip ')'
+                // flush literal and emit func segment
+                if !lit.is_empty() { segs.push(Segment::Lit(std::mem::take(&mut lit))); }
+                segs.push(Segment::Func { name: name.to_string(), args: vec![arg.to_string(), text.to_string()] });
+                i = j;
+                continue;
+            }
+
+            // default literal
+            lit.push(ch);
+            i += ch.len_utf8();
+        }
+        if !lit.is_empty() { segs.push(Segment::Lit(lit)); }
+        Ok(Template(segs))
+    }
 }
 
 #[cfg(test)]
@@ -130,5 +232,26 @@ mod tests {
     fn parse_unclosed_errors() {
         let err = Template::parse("${OPEN").unwrap_err();
         matches!(err, SyntaxError::ResolveError(_));
+    }
+}
+
+#[cfg(test)]
+mod jynx_tests {
+    use super::*;
+    struct NoVar; impl VariableResolver for NoVar { fn get(&self, _:&str) -> Option<String> { None } }
+    struct EchoFunc; impl FuncResolver for EchoFunc { fn call(&self, name:&str, args:&[String]) -> Result<String, SyntaxError> { Ok(format!("<{}:{}:{}>", name, args.get(0).cloned().unwrap_or_default(), args.get(1).cloned().unwrap_or_default())) } }
+
+    #[test]
+    fn parse_jynx_func_basic() {
+        let t = Template::parse_jynx("hello %pre:warn(ERROR) world").unwrap();
+        let s = t.render(&NoVar, &EchoFunc).unwrap();
+        assert_eq!(s, "hello <pre:warn:ERROR> world");
+    }
+
+    #[test]
+    fn parse_jynx_nested_parens() {
+        let t = Template::parse_jynx("%pre:warn(Foo(bar))").unwrap();
+        let s = t.render(&NoVar, &EchoFunc).unwrap();
+        assert_eq!(s, "<pre:warn:Foo(bar)>");
     }
 }
