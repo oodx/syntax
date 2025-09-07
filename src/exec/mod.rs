@@ -21,7 +21,7 @@ pub struct Planner<'a, R: Renderer> { pub renderer: &'a R }
 
 impl<'a, R: Renderer> Planner<'a, R> {
     pub fn plan(&self, pipe: &PipelineSpec) -> Result<String, SyntaxError> {
-        self.renderer.render_pipe(pipe)
+        self.renderer.render_pipe_plan(pipe)
     }
 }
 
@@ -35,4 +35,3 @@ impl Executor for StdExecutor {
         Err(SyntaxError::ExecError("StdExecutor not implemented".into()))
     }
 }
-

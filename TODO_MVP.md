@@ -1,0 +1,25 @@
+# Syntax MVP TODO
+
+- POSIX renderer [DONE]
+  - Safe single-quote escaping for args and env values [DONE]
+  - Render env assignments and `cd <dir> &&` for cwd [DONE]
+  - Render redirections for stdin/stdout/stderr (file/null), append [DONE]
+  - Render pipelines with `|` and optional background `&` [DONE]
+  - Include timeout/retry as plan metadata comments [DONE]
+- Windows renderer (cmd.exe)
+  - Proper quoting/escaping
+  - Parity with POSIX features where feasible
+- Template parser
+  - Parse `${VAR}` and literals into `Template`
+  - (Optional) simple function call syntax
+- Executor (feature = exec)
+  - Minimal `StdExecutor` using `std::process`
+  - Return `ExecResult`
+- Tests
+  - POSIX quoting/escaping, redirections, cwd/env
+  - Pipeline planning output
+  - Template render with resolvers
+- Examples & docs
+  - Pipeline build + plan
+  - Template → Command args
+  - RSB adapter notes (resolver/executor)
