@@ -1,0 +1,15 @@
+[package]
+name = "syntax"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Command and template AST for safe, cross-platform CLI construction"
+
+[features]
+default = []
+exec = []
+
+[lib]
+name = "syntax"
+path = "src/lib.rs"
+
