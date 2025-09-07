@@ -9,8 +9,8 @@
 - Windows renderer (cmd.exe)
   - Proper quoting/escaping
   - Parity with POSIX features where feasible
-- Template parser
-  - Parse `${VAR}` and literals into `Template`
+- Template parser [DONE]
+  - Parse `${VAR}` and literals into `Template` [DONE]
   - (Optional) simple function call syntax
 - Executor (feature = exec)
   - Minimal `StdExecutor` using `std::process`
