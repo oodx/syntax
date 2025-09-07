@@ -12,9 +12,9 @@
 - Template parser [DONE]
   - Parse `${VAR}` and literals into `Template` [DONE]
   - (Optional) simple function call syntax
-- Executor (feature = exec)
-  - Minimal `StdExecutor` using `std::process`
-  - Return `ExecResult`
+- Executor (feature = exec) [DONE]
+  - Minimal `StdExecutor` using `std::process` [DONE]
+  - Return `ExecResult` [DONE]
 - Tests
   - POSIX quoting/escaping, redirections, cwd/env
   - Pipeline planning output
