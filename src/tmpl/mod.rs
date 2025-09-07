@@ -198,6 +198,97 @@ impl Template {
         if !lit.is_empty() { segs.push(Segment::Lit(lit)); }
         Ok(Template(segs))
     }
+
+    /// Simple pseudo-template language ("SimpleTL")
+    /// Supported tokens inside `{{ ... }}`:
+    /// - Variables: `{{var}}` where var = [A-Za-z0-9_.-]+
+    /// - Inline functions: `{{func:arg(text)}}` similar to Jynx, with balanced parentheses for text
+    /// - Comments: `{{! anything here }}` (ignored)
+    /// Everything else is treated as literal text, including unmatched braces.
+    pub fn parse_simple(input: &str) -> Result<Self, SyntaxError> {
+        let mut segs: Vec<Segment> = Vec::new();
+        let mut lit = String::new();
+        let bytes = input.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            // look for '{{'
+            if bytes[i] as char == '{' && i + 1 < bytes.len() && bytes[i + 1] as char == '{' {
+                // flush literal
+                if !lit.is_empty() { segs.push(Segment::Lit(std::mem::take(&mut lit))); }
+                i += 2; // skip '{{'
+                // find closing '}}'
+                let start = i;
+                let mut j = i;
+                let mut found = false;
+                while j + 1 < bytes.len() {
+                    if bytes[j] as char == '}' && bytes[j + 1] as char == '}' { found = true; break; }
+                    j += 1;
+                }
+                if !found {
+                    // no closing, treat as literal '{{' and continue
+                    lit.push_str("{{");
+                    i = start;
+                    continue;
+                }
+                let inner = input[start..j].trim();
+                i = j + 2; // past '}}'
+                // comment
+                if inner.starts_with('!') { continue; }
+                // variable
+                if !inner.is_empty() && inner.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.' ) {
+                    segs.push(Segment::Var(inner.to_string()));
+                    continue;
+                }
+                // function func:arg(text)
+                // parse name
+                let mut k = 0;
+                while k < inner.len() {
+                    let c = inner.as_bytes()[k] as char;
+                    if c.is_ascii_alphanumeric() || c == '_' || c == '-' { k += 1; } else { break; }
+                }
+                if k > 0 && k < inner.len() && inner.as_bytes()[k] as char == ':' {
+                    let name = &inner[..k];
+                    let mut p = k + 1; // after ':'
+                    // arg until '(' (no whitespace)
+                    let arg_start = p;
+                    while p < inner.len() {
+                        let c = inner.as_bytes()[p] as char;
+                        if c == '(' || c.is_whitespace() { break; }
+                        p += 1;
+                    }
+                    if p < inner.len() && inner.as_bytes()[p] as char == '(' {
+                        let arg = &inner[arg_start..p];
+                        // balanced parentheses for text
+                        p += 1; // skip '('
+                        let text_start = p;
+                        let mut depth = 1;
+                        while p < inner.len() {
+                            let c = inner.as_bytes()[p] as char;
+                            if c == '(' { depth += 1; }
+                            else if c == ')' { depth -= 1; if depth == 0 { break; } }
+                            p += 1;
+                        }
+                        if depth == 0 {
+                            let text = &inner[text_start..p];
+                            segs.push(Segment::Func { name: name.to_string(), args: vec![arg.to_string(), text.to_string()] });
+                            continue;
+                        }
+                    }
+                }
+                // fallback: treat whole block as literal including delimiters
+                lit.push_str("{{");
+                lit.push_str(inner);
+                lit.push_str("}}");
+            } else {
+                // regular char
+                let ch = bytes[i] as char;
+                lit.push(ch);
+                i += ch.len_utf8();
+            }
+        }
+        if !lit.is_empty() { segs.push(Segment::Lit(lit)); }
+        Ok(Template(segs))
+    }
 }
 
 #[cfg(test)]
@@ -253,5 +344,26 @@ mod jynx_tests {
         let t = Template::parse_jynx("%pre:warn(Foo(bar))").unwrap();
         let s = t.render(&NoVar, &EchoFunc).unwrap();
         assert_eq!(s, "<pre:warn:Foo(bar)>");
+    }
+}
+
+#[cfg(test)]
+mod simple_tests {
+    use super::*;
+    struct NoVar; impl VariableResolver for NoVar { fn get(&self, _:&str) -> Option<String> { None } }
+    struct Echo; impl FuncResolver for Echo { fn call(&self, n:&str, a:&[String]) -> Result<String, SyntaxError> { Ok(format!("<{}:{}:{}>", n, a.get(0).cloned().unwrap_or_default(), a.get(1).cloned().unwrap_or_default())) } }
+
+    #[test]
+    fn simple_var_and_literal() {
+        let t = Template::parse_simple("Hello {{user.name}}!").unwrap();
+        let s = t.render(&NoVar, &Echo).unwrap();
+        assert_eq!(s, "Hello !"); // NoVar returns None, so empty for var
+    }
+
+    #[test]
+    fn simple_func_inline() {
+        let t = Template::parse_simple("{{color:red(Hi)}} world").unwrap();
+        let s = t.render(&NoVar, &Echo).unwrap();
+        assert_eq!(s, "<color:red:Hi> world");
     }
 }
