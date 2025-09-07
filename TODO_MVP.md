@@ -6,9 +6,9 @@
   - Render redirections for stdin/stdout/stderr (file/null), append [DONE]
   - Render pipelines with `|` and optional background `&` [DONE]
   - Include timeout/retry as plan metadata comments [DONE]
-- Windows renderer (cmd.exe)
-  - Proper quoting/escaping
-  - Parity with POSIX features where feasible
+- Windows renderer (cmd.exe) [DONE]
+  - Proper quoting/escaping [DONE]
+  - Parity with POSIX features where feasible [DONE]
 - Template parser [DONE]
   - Parse `${VAR}` and literals into `Template` [DONE]
   - (Optional) simple function call syntax
