@@ -18,6 +18,7 @@ pub enum Segment {
     Var(String),
     Get(String),
     Set { key: String, value: Template },
+    For { var: String, list: Template, body: Template, sep: Option<Template> },
     Func { name: String, args: Vec<Arg> },
 }
 
@@ -51,6 +52,25 @@ impl Template {
                 Segment::Set { key, value } => {
                     let val = value.render(vars, funcs)?;
                     let _ = funcs.call("set", &vec![key.clone(), val]);
+                }
+                Segment::For { var, list, body, sep } => {
+                    let list_s = list.render(vars, funcs)?;
+                    let sep_s = match sep { Some(t) => t.render(vars, funcs)?, None => String::new() };
+                    let items: Vec<String> = if list_s.contains('\n') {
+                        list_s.lines().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+                    } else if list_s.contains(',') {
+                        list_s.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+                    } else {
+                        list_s.split_whitespace().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+                    };
+                    let mut first = true;
+                    for it in items {
+                        let _ = funcs.call("set", &vec![var.clone(), it]);
+                        let part = body.render(vars, funcs)?;
+                        if !first && !sep_s.is_empty() { out.push_str(&sep_s); }
+                        out.push_str(&part);
+                        first = false;
+                    }
                 }
                 Segment::Func { name, args } => {
                     let mut evald: Vec<String> = Vec::new();
@@ -158,5 +178,25 @@ mod simple_tests {
         let t = Template::parse_simple("{{color:red(Hi)}} world").unwrap();
         let s = t.render(&NoVar, &Echo).unwrap();
         assert_eq!(s, "<color:red:Hi> world");
+    }
+
+    use std::cell::RefCell; use std::collections::HashMap; use std::rc::Rc;
+    struct Store { m: Rc<RefCell<HashMap<String,String>>> }
+    impl VariableResolver for Store { fn get(&self, k: &str) -> Option<String> { self.m.borrow().get(k).cloned() } }
+    impl FuncResolver for Store {
+        fn call(&self, name:&str, a:&[String]) -> Result<String, SyntaxError> {
+            match name {
+                "set" => { if a.len()>=2 { self.m.borrow_mut().insert(a[0].clone(), a[1].clone()); } Ok(String::new()) }
+                _ => Ok(String::new())
+            }
+        }
+    }
+
+    #[test]
+    fn jynx_for_loop_csv() {
+        let state = Store { m: Rc::new(RefCell::new(HashMap::new())) };
+        let tpl = Template::parse_jynx("%for:item(a,b,c)([${item}])(,)").unwrap();
+        let out = tpl.render(&state, &state).unwrap();
+        assert_eq!(out, "[a],[b],[c]");
     }
 }

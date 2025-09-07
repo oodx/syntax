@@ -35,11 +35,30 @@ pub fn parse_jynx(input: &str) -> Result<Template, SyntaxError> {
             let arg = &input[arg_start..j]; j += 1; let text_start = j; let mut depth = 1;
             while j < bytes.len() { let c = bytes[j] as char; if c == '(' { depth += 1; } else if c == ')' { depth -= 1; if depth == 0 { break; } } j += 1; }
             if depth != 0 { return Err(SyntaxError::ResolveError("Unclosed ( in %func call".into())); }
-            let text = &input[text_start..j]; j += 1;
+            let text1 = &input[text_start..j]; j += 1;
+            // Optional more parentheses groups
+            let mut bodies: Vec<Template> = Vec::new();
+            let first_tpl = parse_jynx(text1)?; bodies.push(first_tpl);
+            // read additional ( ... )
+            while j < bytes.len() && bytes[j] as char == '(' {
+                j += 1; let start2 = j; let mut d2 = 1;
+                while j < bytes.len() { let c = bytes[j] as char; if c == '(' { d2 += 1; } else if c == ')' { d2 -= 1; if d2 == 0 { break; } } j += 1; }
+                if d2 != 0 { return Err(SyntaxError::ResolveError("Unclosed ( in %func call".into())); }
+                let txt = &input[start2..j]; j += 1; bodies.push(parse_jynx(txt)?);
+            }
             if !lit.is_empty() { segs.push(Segment::Lit(std::mem::take(&mut lit))); }
-            // nested parse for text
-            let inner_tpl = parse_jynx(text)?;
-            segs.push(Segment::Func { name: name.to_string(), args: vec![Arg::Text(arg.to_string()), Arg::Tpl(inner_tpl)] });
+            if name == "for" {
+                let var = arg.to_string();
+                let list = bodies.get(0).cloned().unwrap_or_else(|| Template(vec![]));
+                let body_t = bodies.get(1).cloned().unwrap_or_else(|| Template(vec![]));
+                let sep = bodies.get(2).cloned();
+                segs.push(Segment::For { var, list, body: body_t, sep });
+            } else {
+                let mut fn_args: Vec<Arg> = Vec::new();
+                fn_args.push(Arg::Text(arg.to_string()));
+                for t in bodies { fn_args.push(Arg::Tpl(t)); }
+                segs.push(Segment::Func { name: name.to_string(), args: fn_args });
+            }
             i = j; continue;
         }
         lit.push(ch); i += ch.len_utf8();

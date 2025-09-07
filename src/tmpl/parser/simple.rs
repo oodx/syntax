@@ -26,7 +26,30 @@ pub fn parse_simple(input: &str) -> Result<Template, SyntaxError> {
                 if p < inner.len() && inner.as_bytes()[p] as char == '(' {
                     let arg = &inner[arg_start..p]; p += 1; let text_start = p; let mut depth = 1;
                     while p < inner.len() { let c = inner.as_bytes()[p] as char; if c == '(' { depth += 1; } else if c == ')' { depth -= 1; if depth == 0 { break; } } p += 1; }
-                    if depth == 0 { let text = &inner[text_start..p]; let inner_tpl = parse_simple(text)?; segs.push(Segment::Func { name: name.to_string(), args: vec![Arg::Text(arg.to_string()), Arg::Tpl(inner_tpl)] }); continue; }
+                    if depth == 0 {
+                        let text1 = &inner[text_start..p]; p += 1;
+                        let mut bodies: Vec<Template> = vec![parse_simple(text1)?];
+                        // extra bodies
+                        while p < inner.len() && inner.as_bytes()[p] as char == '(' {
+                            p += 1; let s2 = p; let mut d2 = 1;
+                            while p < inner.len() { let c = inner.as_bytes()[p] as char; if c == '(' { d2 += 1; } else if c == ')' { d2 -= 1; if d2 == 0 { break; } } p += 1; }
+                            if d2 != 0 { break; }
+                            let t2 = &inner[s2..p]; p += 1; bodies.push(parse_simple(t2)?);
+                        }
+                        if name == "for" {
+                            let var = arg.to_string();
+                            let list = bodies.get(0).cloned().unwrap_or_else(|| Template(vec![]));
+                            let body_t = bodies.get(1).cloned().unwrap_or_else(|| Template(vec![]));
+                            let sep = bodies.get(2).cloned();
+                            segs.push(Segment::For { var, list, body: body_t, sep });
+                        } else {
+                            let mut fn_args: Vec<Arg> = Vec::new();
+                            fn_args.push(Arg::Text(arg.to_string()));
+                            for t in bodies { fn_args.push(Arg::Tpl(t)); }
+                            segs.push(Segment::Func { name: name.to_string(), args: fn_args });
+                        }
+                        continue;
+                    }
                 }
             }
             lit.push_str("{{"); lit.push_str(inner); lit.push_str("}}");
