@@ -78,11 +78,8 @@ fn parse_my_format(input: &str) -> Result<Template, SyntaxError> {
 - Composition (sequence): chain multiple segments in order, like:
   - `Lit("hello ")`, `Func{ name:"color", args:["red","world"] }`, `Lit("!")`
 - Nesting (inside `(text)`):
-  - `parse_jynx` supports balanced parentheses in the text area but does not recursively parse function calls inside.
-  - If you need nested functions (e.g., `%color:red(%e:warn("X"))`), options:
-    1) Parse once for the outer function, then run a second pass on the inner text to produce another `Template` and combine in your `FuncResolver`.
-    2) Build `Template` programmatically for nested structures and render separately.
-  - Future: we may extend the segment model to allow function arguments to be nested `Template`s; today args are plain strings.
+  - We support nested templates via `Arg::Tpl(Template)` for function arguments and for-loops.
+  - Jynx parser recursively parses function bodies; SimpleTL parser does too, and within bodies it uses the bash-like `${VAR}` form.
 
 ## Pattern limitations (today)
 - `${VAR}`: var names limited to `[A-Za-z0-9_-]+`.
@@ -97,3 +94,41 @@ fn parse_my_format(input: &str) -> Result<Template, SyntaxError> {
 ## Where to start
 - If your notation looks like Jynx’s, use `Template::parse_jynx` directly.
 - If it’s different (e.g., `:var:` or `@VAR@`), copy the skeleton, produce segments, and reuse the same `render(..)` with your resolvers.
+
+## Iteration (For-Loops)
+
+First-class node: `Segment::For { var, list, body, sep }`.
+
+- Jynx syntax: `%for:var(list)(body)(sep?)`
+  - Example: `%for:item(a,b,c)([${item}])(,)` → `[a],[b],[c]`
+  - `list`, `body`, `sep` are parsed as nested templates.
+
+- SimpleTL syntax: `{{for:var(list)(body)(sep?)}}`
+  - Example: `{{for:item(a,b,c)([${item}])(,)}}` → `[a],[b],[c]`
+  - Inside bodies, prefer `${item}` form (bash-like) for variables.
+
+List splitting order:
+1) newline, 2) comma, 3) whitespace.
+
+Per-iteration variable:
+- Before each body render, we call `FuncResolver::call("set", [var, item])`. Implement `set` to write into your store. `VariableResolver` reads from the same store.
+
+Reference resolver sketch:
+```rust
+use std::cell::RefCell; use std::collections::HashMap; use std::rc::Rc;
+use syntax::tmpl::{VariableResolver, FuncResolver, SyntaxError};
+
+struct Store { m: Rc<RefCell<HashMap<String,String>>> }
+impl VariableResolver for Store { fn get(&self, k:&str) -> Option<String> { self.m.borrow().get(k).cloned() } }
+impl FuncResolver for Store {
+  fn call(&self, name:&str, a:&[String]) -> Result<String, SyntaxError> {
+    match name {
+      "set" => { if a.len()>=2 { self.m.borrow_mut().insert(a[0].clone(), a[1].clone()); } Ok(String::new()) }
+      _ => Ok(String::new())
+    }
+  }
+}
+```
+
+Paintbox integration:
+- In your `FuncResolver`, map styling funcs like `color:red(text)` to Paintbox spans and render to ANSI (or plain when NO_COLOR).

@@ -199,4 +199,12 @@ mod simple_tests {
         let out = tpl.render(&state, &state).unwrap();
         assert_eq!(out, "[a],[b],[c]");
     }
+
+    #[test]
+    fn simple_for_loop_csv() {
+        let state = Store { m: Rc::new(RefCell::new(HashMap::new())) };
+        let tpl = Template::parse_simple("{{for:item(a,b,c)([${item}])(,)}}").unwrap();
+        let out = tpl.render(&state, &state).unwrap();
+        assert_eq!(out, "[a],[b],[c]");
+    }
 }

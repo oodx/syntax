@@ -28,13 +28,13 @@ pub fn parse_simple(input: &str) -> Result<Template, SyntaxError> {
                     while p < inner.len() { let c = inner.as_bytes()[p] as char; if c == '(' { depth += 1; } else if c == ')' { depth -= 1; if depth == 0 { break; } } p += 1; }
                     if depth == 0 {
                         let text1 = &inner[text_start..p]; p += 1;
-                        let mut bodies: Vec<Template> = vec![parse_simple(text1)?];
+                        let mut bodies: Vec<Template> = vec![super::bash::parse(text1)?];
                         // extra bodies
                         while p < inner.len() && inner.as_bytes()[p] as char == '(' {
                             p += 1; let s2 = p; let mut d2 = 1;
                             while p < inner.len() { let c = inner.as_bytes()[p] as char; if c == '(' { d2 += 1; } else if c == ')' { d2 -= 1; if d2 == 0 { break; } } p += 1; }
                             if d2 != 0 { break; }
-                            let t2 = &inner[s2..p]; p += 1; bodies.push(parse_simple(t2)?);
+                            let t2 = &inner[s2..p]; p += 1; bodies.push(super::bash::parse(t2)?);
                         }
                         if name == "for" {
                             let var = arg.to_string();
