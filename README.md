@@ -11,6 +11,53 @@ Command, template AST, and parsers for safe, cross‑platform CLI construction.
 
 Docs: `docs/rfcs/AST-RFC.md`, `docs/PARSERS.md`.
 
+## Easy Mode (UX‑first)
+
+Don’t wire traits by hand. Use the grab‑and‑go helpers/macros:
+
+```rust
+use syntax::prelude::*; // imports Template, resolvers, and helpers
+use syntax::{sx_bash, sx_jynx, sx_simple, sx_store};
+
+// 1) Bash‑like vars with defaults
+let out = sx_bash!("release-${USER}.tar.gz")?;
+
+// 2) Provide your own store
+let vars = sx_store! { "name" => "world" };
+let out = sx_bash!("hello ${name}", with: vars)?; // "hello world"
+
+// 3) Jynx syntax (functions supported by your FuncResolver)
+let out = sx_jynx!("%pre:warn(ERROR)")?; // With default NoFunc this returns "<pre:warn:ERROR>" in tests
+```
+
+## Paintbox Lens (optional)
+
+Enable feature `paintbox` to render terminal UX directly via Paintbox:
+
+```toml
+[features]
+paintbox = ["dep:paintbox"]
+
+[dependencies.paintbox]
+path = "../paintbox"
+optional = true
+```
+
+```rust
+use syntax::lens::{UiTheme, render_jynx_with_theme};
+use paintbox::prelude::*;
+
+let yaml = r#"
+palette: { info: 39 }
+classes: { info: { fg: "info", bold: true } }
+"#;
+let theme = Theme::from_yaml(yaml).unwrap();
+
+let ui = UiTheme { theme, color_mode: ColorMode::Auto };
+let out = render_jynx_with_theme("%color:info(Hello) %box:rounded(Status)(OK)", ui)?;
+println!("{}", out);
+```
+
 ## Symbol Table (Variables)
 
 The crate stays generic. You provide a “symbol table” (variable store) via resolvers:

@@ -8,8 +8,14 @@ description = "Command and template AST for safe, cross-platform CLI constructio
 [features]
 default = []
 exec = []
+paintbox = ["dep:paintbox"]
 
 [lib]
 name = "syntax"
 path = "src/lib.rs"
 
+[dependencies]
+
+[dependencies.paintbox]
+optional = true
+path = "../paintbox"
