@@ -1,0 +1,8 @@
+[package]
+name = "syntax"
+version = "0.4.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+authors = ["qodeninja"]
+description = "Fast, zero-copy AST library for multi-syntax parsing and emission"
+
