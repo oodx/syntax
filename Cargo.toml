@@ -1,5 +1,5 @@
 [package]
-name = "syntax"
+name = "syntax-core"
 version = "0.4.0"
 edition = "2021"
 license = "AGPL-3.0-only"

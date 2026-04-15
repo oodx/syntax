@@ -1,4 +1,4 @@
-# Syntax 
+# Syntax (syntax-core)
 
 🌲 SYNTAX v 0.0.4 
 
@@ -11,6 +11,7 @@ Originally designed as a pure AST (until I realized AST isn't the optimal model 
 - `Tape` for lazy document traversal 
 - `Others` other standard formats on backburner
 
+*officially "syntax-core" because syntax is a reserved name.*
 
 Language developers can use the Syntax API to define their shapes and parser rules, and deploy their parser engines in other projects.
 
