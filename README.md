@@ -18,7 +18,7 @@ Language developers can use the Syntax API to define their shapes and parser rul
 
 # Syntax Dev Roadmap - internal
 
-# Houses Dev Roadmap - Cratespace aka Official Syntax Houses
+# Houses Dev Roadmap  
 Planned syntax based libs, we'll see how far we get. 
 
 ## Tier 1 - Now
